@@ -34,6 +34,13 @@ func TestMaxFiniteSize(t *testing.T) {
 	assert.Equal(t, 17, maxSize)
 }
 
+func TestSizeOfRegionWithDistanceToAllBelowThreshold(t *testing.T) {
+	universe := ParseInput(testInput())
+
+	var size int = SizeOfRegionWithDistanceToAllBelowThreshold(universe, 32)
+	assert.Equal(t, 16, size)
+}
+
 func testInput() []string {
 	return []string{
 		"1, 1",

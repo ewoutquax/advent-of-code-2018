@@ -40,7 +40,7 @@ const INFINITE int = math.MaxInt
 
 func init() {
 	register.Day(Day+"a", solvePart1)
-	// register.Day(Day+"b", solvePart2)
+	register.Day(Day+"b", solvePart2)
 }
 
 func solvePart1(inputFile string) {
@@ -52,7 +52,33 @@ func solvePart1(inputFile string) {
 }
 
 func solvePart2(inputFile string) {
-	fmt.Printf("Result of day-%s / part-2: %d\n", Day, 0)
+	lines := utils.ReadFileAsLines(inputFile)
+	universe := ParseInput(lines)
+	var size int = SizeOfRegionWithDistanceToAllBelowThreshold(universe, 10_000)
+
+	fmt.Printf("Result of day-%s / part-2: %d\n", Day, size)
+}
+
+func SizeOfRegionWithDistanceToAllBelowThreshold(universe Universe, threshold int) int {
+	var size int = 0
+
+	for y := universe.MinY - threshold; y <= universe.MinY+threshold; y++ {
+		for x := universe.MinX - threshold; x <= universe.MinX+threshold; x++ {
+			var currentLocation Location = Location{x, y}
+			var totalDistance int = 0
+			for _, area := range universe.Areas {
+				if totalDistance > threshold {
+					break
+				}
+				totalDistance += currentLocation.ManhattanDistance(area.Location)
+			}
+			if totalDistance < threshold {
+				size++
+			}
+		}
+	}
+
+	return size
 }
 
 func MaxFiniteSize(universe Universe) int {
