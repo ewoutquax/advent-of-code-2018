@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"regexp"
 	"sort"
+	"strings"
 
 	"github.com/ewoutquax/advent-of-code-2018/pkg/register"
 	"github.com/ewoutquax/advent-of-code-2018/pkg/utils"
@@ -11,104 +12,146 @@ import (
 
 const Day string = "07"
 
-type Item string
+type Item struct {
+	Name               string
+	BlockedBy          []*Item
+	RemainingBuildTime int
+	IsInProgress       bool
+}
+
+func (item *Item) CanBeStarted() bool {
+	if item.IsInProgress || item.RemainingBuildTime == 0 {
+		return false
+	}
+
+	for _, blockingItem := range item.BlockedBy {
+		if blockingItem.RemainingBuildTime > 0 {
+			return false
+		}
+	}
+
+	return true
+}
 
 type Order struct {
-	Before Item
-	After  Item
+	Before *Item
+	After  *Item
 }
 
 type Universe struct {
 	Orders []Order
+	Items  map[string]*Item
 }
 
-func BuildOrder(universe Universe) string {
-	var tmpSorting map[Item]bool = make(map[Item]bool, len(universe.Orders)*2)
-
-	for _, order := range universe.Orders {
-		tmpSorting[order.Before] = true
-		tmpSorting[order.After] = true
-	}
-
-	// Copy the unique items to a list
-	var sorting = make([]Item, 0, len(tmpSorting))
-	for item := range tmpSorting {
-		sorting = append(sorting, item)
-	}
-
-	// Sort the list in alphabetical order
-	sort.Slice(sorting, func(i, j int) bool {
-		return sorting[i] < sorting[j]
-	})
-
-	// Loop through the orders, and swap the positions of the items
-	for _, order := range universe.Orders {
-		idxBefore := indexOf(sorting, order.Before)
-		idxAfter := indexOf(sorting, order.After)
-
-		if idxBefore > idxAfter {
-			start := sorting[:idxAfter]
-			middle := sorting[idxAfter+1 : idxBefore]
-			end := sorting[idxBefore+1:]
-			before := sorting[idxBefore]
-			after := sorting[idxAfter]
-
-			sorting = append(start, before)
-			sorting = append(sorting, middle...)
-			sorting = append(sorting, after)
-			sorting = append(sorting, end...)
+func (u Universe) AllItemsBuild() bool {
+	for _, item := range u.Items {
+		if item.RemainingBuildTime > 0 {
+			return false
 		}
 	}
 
-	// Copy the sorted items to a string
-	var out string = ""
-	for _, item := range sorting {
-		out += string(item)
-	}
-
-	return out
+	return true
 }
 
-func ParseInput(lines []string) Universe {
-	var u Universe
+func BuildMetrics(universe Universe, nrWorkers int) (string, int) {
+	var order []string = make([]string, 0, len(universe.Items))
+	var elapsedTime int = 0
+	var nrAvailableWorkers int = nrWorkers
+
+	for !universe.AllItemsBuild() {
+		startableItems := getStartableItems(universe)
+		for len(startableItems) > 0 && nrAvailableWorkers > 0 {
+			universe.Items[startableItems[0]].IsInProgress = true
+			order = append(order, startableItems[0])
+
+			nrAvailableWorkers--
+			startableItems = getStartableItems(universe)
+		}
+
+		elapsedTime++
+
+		for _, item := range universe.Items {
+			if item.IsInProgress {
+				item.RemainingBuildTime--
+				if item.RemainingBuildTime == 0 {
+					item.IsInProgress = false
+					nrAvailableWorkers++
+				}
+			}
+		}
+	}
+
+	return strings.Join(order, ""), elapsedTime
+}
+
+func getStartableItems(universe Universe) []string {
+	items := make([]string, 0, len(universe.Items))
+	for _, item := range universe.Items {
+		if item.CanBeStarted() {
+			items = append(items, item.Name)
+		}
+	}
+	sort.Strings(items)
+
+	return items
+}
+
+func ParseInput(lines []string, offsetBuildTime int) Universe {
+	var u Universe = Universe{
+		Orders: make([]Order, 0, len(lines)),
+		Items:  make(map[string]*Item, len(lines)*2),
+	}
 
 	for _, line := range lines {
 		ex := regexp.MustCompile(`Step ([A-Z]) must be finished before step ([A-Z]) can begin.`)
 		match := ex.FindStringSubmatch(line)
 
+		itemBefore, existsBefore := u.Items[match[1]]
+		if !existsBefore {
+			itemBefore = &Item{
+				Name:               match[1],
+				RemainingBuildTime: offsetBuildTime + 1 + int(match[1][0]-'A'),
+			}
+		}
+
+		itemAfter, existsAfter := u.Items[match[2]]
+		if !existsAfter {
+			itemAfter = &Item{
+				Name:               match[2],
+				RemainingBuildTime: offsetBuildTime + 1 + int(match[2][0]-'A'),
+			}
+		}
+
+		u.Items[itemBefore.Name] = itemBefore
+		u.Items[itemAfter.Name] = itemAfter
+		u.Items[itemAfter.Name].BlockedBy = append(u.Items[itemAfter.Name].BlockedBy, itemBefore)
+
 		u.Orders = append(u.Orders, Order{
-			Before: Item(match[1]),
-			After:  Item(match[2]),
+			Before: u.Items[itemBefore.Name],
+			After:  u.Items[itemAfter.Name],
 		})
 	}
 
 	return u
 }
 
-func indexOf(haystack []Item, needle Item) int {
-	for idx, item := range haystack {
-		if item == needle {
-			return idx
-		}
-	}
-	return -1
-}
-
 func solvePart1(inputFile string) {
 	lines := utils.ReadFileAsLines(inputFile)
-	universe := ParseInput(lines)
+	universe := ParseInput(lines, 0)
+	order, _ := BuildMetrics(universe, 1)
 
-	fmt.Printf("Result of day-%s / part-1: %s\n", Day, BuildOrder(universe))
+	fmt.Printf("Result of day-%s / part-1: %s\n", Day, order)
 }
 
 func solvePart2(inputFile string) {
-	// lines := utils.ReadFileAsLines(inputFile)
+	lines := utils.ReadFileAsLines(inputFile)
+	universe := ParseInput(lines, 60)
+	_, elapsedTime := BuildMetrics(universe, 5)
 
-	var count int = 0
-	fmt.Printf("Result of day-%s / part-2: %d\n", Day, count)
+	fmt.Printf("Result of day-%s / part-2: %d\n", Day, elapsedTime)
 }
 
 func init() {
 	register.Day(Day+"a", solvePart1)
-	// register.Day(Day+"b", solvePart2)
+	register.Day(Day+"b", solvePart2)
 }
