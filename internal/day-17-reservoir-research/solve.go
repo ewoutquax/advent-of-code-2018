@@ -2,11 +2,15 @@ package day17reservoirresearch
 
 import (
 	"fmt"
+	"image/color"
+	"log"
+	"reflect"
 	"slices"
 	"strings"
 
 	"github.com/ewoutquax/advent-of-code-2018/pkg/register"
 	"github.com/ewoutquax/advent-of-code-2018/pkg/utils"
+	"github.com/hajimehoshi/ebiten/v2"
 )
 
 const Day string = "17"
@@ -18,6 +22,21 @@ const (
 	TypeFallingWater string = "falling"
 	TypeStillWater   string = "still"
 	TypeSlidingWater string = "sliding"
+)
+
+var (
+	white = color.RGBA{
+		R: 255,
+		G: 255,
+		B: 255,
+		A: 255,
+	}
+	blue = color.RGBA{
+		R: 30,
+		G: 30,
+		B: 255,
+		A: 255,
+	}
 )
 
 type Location struct {
@@ -158,6 +177,38 @@ func (u *Universe) SimulateSlidingWater(item *SlidingWater) {
 	}
 }
 
+type Game struct {
+	universe *Universe
+}
+
+func (g *Game) Update() error {
+	return nil
+}
+
+func (g *Game) Draw(screen *ebiten.Image) {
+	fmt.Println("Start drawing")
+	for _, item := range g.universe.Items {
+		switch item.(type) {
+		case *Clay:
+			screen.Set(item.(*Clay).Location.X, item.(*Clay).Location.Y, white)
+
+		case *StillWater:
+			screen.Set(item.(*StillWater).Location.X, item.(*StillWater).Location.Y, blue)
+		case StillWater:
+			screen.Set(item.(StillWater).Location.X, item.(StillWater).Location.Y, blue)
+		default:
+			fmt.Printf("item: %v\n", item)
+			fmt.Printf("reflect.TypeOf(item): %v\n", reflect.TypeOf(item))
+			panic("What is this type?")
+		}
+	}
+	fmt.Println("Done drawing")
+}
+
+func (g *Game) Layout(_, _ int) (w, h int) {
+	return 1000, 2000
+}
+
 func convertSlidingIntoFalling(item *SlidingWater, u *Universe) *FallingWater {
 	newLoc := item.Location
 	newLoc.Y += 1
@@ -291,7 +342,13 @@ func solvePart1(inputFile string) {
 	universe := ParseInput(lines)
 	universe.AddInitialWater()
 
-	SimulateFlow(&universe)
+	go SimulateFlow(&universe)
+
+	ebiten.SetWindowSize(1000*2, 2000*2)
+	ebiten.SetWindowTitle("Reservoir Research")
+	if err := ebiten.RunGame(&Game{universe: &universe}); err != nil {
+		log.Fatal(err)
+	}
 
 	// Too low:
 	// --------
