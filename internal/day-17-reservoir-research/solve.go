@@ -61,7 +61,29 @@ type StillWater struct {
 type FallingWater struct {
 	Type ItemType
 	Location
+	Parent          *FallingWater
 	SlidingChildren []*SlidingWater
+	IsFalling       bool
+}
+
+func (w *FallingWater) hasActiveSlidingChildren() bool {
+	for _, child := range w.SlidingChildren {
+		if !child.IsSettled && child.Child == nil {
+			return true
+		}
+	}
+
+	return false
+}
+
+func (w *FallingWater) hasAllSlidingChildrenSettled() bool {
+	for _, child := range w.SlidingChildren {
+		if !child.IsSettled {
+			return false
+		}
+	}
+
+	return true
 }
 
 func (w *FallingWater) allSiblingsSettled() bool {
@@ -77,102 +99,101 @@ type SlidingWater struct {
 	Type ItemType
 	Location
 	Parent        *FallingWater
+	Child         *FallingWater
 	IsSlidingLeft bool
 	IsSettled     bool
-	IsFalling     bool
 }
 
 type Universe struct {
-	ActiveWaterItems []interface{}
-	Items            map[int]interface{}
-	WaterDrops       int
-	MaxY             int // The highest measured Y value
+	CurrentFallingWater *FallingWater
+	Items               map[int]interface{}
+	WaterDrops          int
+	MaxY                int // The highest measured Y value
 }
 
 func (u *Universe) AddInitialWater() {
-	u.ActiveWaterItems = append(u.ActiveWaterItems, &FallingWater{
-		Type:     ItemType(TypeFallingWater),
-		Location: Location{500, 0},
-	})
+	u.CurrentFallingWater = &FallingWater{
+		Type:      ItemType(TypeFallingWater),
+		Location:  Location{500, 0},
+		Parent:    nil,
+		IsFalling: true,
+	}
 	u.WaterDrops = 0
 }
 
 func (u *Universe) Simulate() {
-	for _, item := range u.ActiveWaterItems {
-		switch item.(type) {
-		case *FallingWater:
-			u.simulateFallingWater(item.(*FallingWater))
-		case *SlidingWater:
-			u.SimulateSlidingWater(item.(*SlidingWater))
-		}
+	switch true {
+	case u.CurrentFallingWater.IsFalling:
+		u.CurrentFallingWater.simulateFalling(u)
+	case u.CurrentFallingWater.hasActiveSlidingChildren():
+		u.CurrentFallingWater.simulateSliding(u)
+	case u.CurrentFallingWater.hasAllSlidingChildrenSettled():
+		// Raise the level of the falling water, and spawn new sliding
+		panic("Not yet implemented")
+	default:
+		// dunno... Stop the stream and set its parent as active?
+		panic("What to do now")
 	}
 }
 
-func (u *Universe) simulateFallingWater(item *FallingWater) {
-	var newLoc Location = item.Location
+func (w *FallingWater) simulateFalling(u *Universe) {
+	var newLoc Location = w.Location
 	newLoc.Y += 1
 
 	if newLoc.Y > u.MaxY {
 		// The stream is going out-of-reach; delete the active water
-		u.ActiveWaterItems = slices.DeleteFunc(u.ActiveWaterItems, func(waterItem interface{}) bool {
-			return waterItem == item
-		})
-	} else if u.Items[newLoc.toI()] == nil {
-		item.Location = newLoc
-		u.WaterDrops += 1
+		u.CurrentFallingWater = w.Parent
+	} else if itemBelow, exists := u.Items[newLoc.toI()]; !exists {
+		switch itemBelow.(type) {
+		case *Clay:
+			// The falling stream hit clay; stop falling, and create 2 sliding streams
+			w.IsFalling = false
+			u.Items[w.Location.toI()] = &StillWater{
+				Type:     ItemType(TypeStillWater),
+				Location: w.Location,
+			}
+
+			// Convert the falling stream into one or two sliding streams, and link them all together
+			w.SlidingChildren = convertFallingIntoSliding(w, u)
+		case *StillWater:
+			// existing water was hit; this stream should end, and we continue with the parent stream
+			w.IsFalling = false
+			u.CurrentFallingWater = w.Parent
+		default:
+			panic("What type of item did we fall on?")
+		}
 	} else {
-		u.Items[item.Location.toI()] = &StillWater{
-			Type:     ItemType(TypeStillWater),
-			Location: item.Location,
-		}
-
-		// Delete the now-ended stream from the active water items
-		u.ActiveWaterItems = slices.DeleteFunc(u.ActiveWaterItems, func(waterItem interface{}) bool {
-			return waterItem == item
-		})
-
-		// Convert the falling stream into one or two sliding streams, and link them all together
-		for _, sliding := range convertFallingIntoSliding(item, u) {
-			u.ActiveWaterItems = append(u.ActiveWaterItems, sliding)
-		}
+		// The stream is still falling
+		w.Location = newLoc
+		u.WaterDrops += 1
 	}
 }
 
-func (u *Universe) SimulateSlidingWater(item *SlidingWater) {
-	newLoc := item.Location
-	if item.IsSlidingLeft {
-		newLoc.X -= 1
-	} else {
-		newLoc.X += 1
-	}
-
-	if u.Items[newLoc.toI()] == nil {
-		item.Location = newLoc
-		u.WaterDrops += 1
-		u.Items[item.Location.toI()] = &StillWater{
-			Type:     ItemType(TypeStillWater),
-			Location: item.Location,
+func (w *FallingWater) simulateSliding(u *Universe) {
+	for _, child := range w.SlidingChildren {
+		newLoc := w.Location
+		if child.IsSlidingLeft {
+			newLoc.X -= 1
+		} else {
+			newLoc.X += 1
 		}
 
-		locBelow := item.Location
-		locBelow.Y += 1
-		if u.Items[locBelow.toI()] == nil {
-			u.ActiveWaterItems = slices.DeleteFunc(u.ActiveWaterItems, func(waterItem interface{}) bool {
-				return waterItem == item
-			})
-			u.ActiveWaterItems = append(u.ActiveWaterItems, convertSlidingIntoFalling(item, u))
-		}
-
-	} else {
-		item.IsSettled = true
-		u.ActiveWaterItems = slices.DeleteFunc(u.ActiveWaterItems, func(waterItem interface{}) bool {
-			return waterItem == item
-		})
-
-		if item.Parent.allSiblingsSettled() {
-			for _, sliding := range convertFallingIntoSliding(item.Parent, u) {
-				u.ActiveWaterItems = append(u.ActiveWaterItems, sliding)
+		if u.Items[newLoc.toI()] == nil {
+			child.Location = newLoc
+			u.WaterDrops += 1
+			u.Items[w.Location.toI()] = &StillWater{
+				Type:     ItemType(TypeStillWater),
+				Location: child.Location,
 			}
+
+			locBelow := child.Location
+			locBelow.Y += 1
+			if u.Items[locBelow.toI()] == nil {
+				// The stream has sliden over an edge, and becomes a the new current falling stream
+				u.CurrentFallingWater = convertSlidingIntoFalling(child, u)
+			}
+		} else {
+			child.IsSettled = true
 		}
 	}
 }
@@ -230,40 +251,34 @@ func convertFallingIntoSliding(item *FallingWater, u *Universe) []*SlidingWater 
 
 	// Try a sliding-stream to the left
 	locLeft := Location{item.Location.X - 1, item.Location.Y + 1}
-	fmt.Printf("convertFallingIntoSliding: locLeft: %v\n", locLeft)
-	if elem, exists := u.Items[locLeft.toI()]; !exists {
-		fmt.Println("Adding sliding water to the left")
+	if _, exists := u.Items[locLeft.toI()]; !exists {
 		newSliding = append(newSliding, &SlidingWater{
 			Type:          ItemType(TypeSlidingWater),
 			Location:      locLeft,
 			Parent:        item,
 			IsSlidingLeft: true,
+			IsSettled:     false,
 		})
 		u.Items[locLeft.toI()] = StillWater{
 			Type:     ItemType(TypeStillWater),
 			Location: locLeft,
 		}
-	} else {
-		fmt.Printf("blocking element for sliding left: %v\n", elem)
 	}
 
 	// Try a sliding-stream to the right
 	locRight := Location{item.Location.X + 1, item.Location.Y + 1}
-	fmt.Printf("convertFallingIntoSliding: locRight: %v\n", locRight)
-	if elem, exists := u.Items[locRight.toI()]; !exists {
-		fmt.Println("Adding sliding water to the right")
+	if _, exists := u.Items[locRight.toI()]; !exists {
 		newSliding = append(newSliding, &SlidingWater{
 			Type:          ItemType(TypeSlidingWater),
 			Location:      locRight,
 			Parent:        item,
 			IsSlidingLeft: false,
+			IsSettled:     false,
 		})
 		u.Items[locRight.toI()] = StillWater{
 			Type:     ItemType(TypeStillWater),
 			Location: locRight,
 		}
-	} else {
-		fmt.Printf("blocking element for sliding right: %v\n", elem)
 	}
 
 	item.SlidingChildren = newSliding
@@ -275,17 +290,17 @@ func convertFallingIntoSliding(item *FallingWater, u *Universe) []*SlidingWater 
 }
 
 func SimulateFlow(u *Universe) {
-	for len(u.ActiveWaterItems) > 0 {
+	for u.CurrentFallingWater != nil {
 		u.Simulate()
 	}
 }
 
 func ParseInput(lines []string) Universe {
 	var universe = Universe{
-		ActiveWaterItems: make([]interface{}, 0),
-		WaterDrops:       0,
-		Items:            make(map[int]interface{}),
-		MaxY:             0,
+		CurrentFallingWater: nil,
+		WaterDrops:          0,
+		Items:               make(map[int]interface{}),
+		MaxY:                0,
 	}
 
 	for _, line := range lines {
@@ -342,13 +357,13 @@ func solvePart1(inputFile string) {
 	universe := ParseInput(lines)
 	universe.AddInitialWater()
 
-	go SimulateFlow(&universe)
-
 	ebiten.SetWindowSize(1000*2, 2000*2)
 	ebiten.SetWindowTitle("Reservoir Research")
 	if err := ebiten.RunGame(&Game{universe: &universe}); err != nil {
 		log.Fatal(err)
 	}
+
+	go SimulateFlow(&universe)
 
 	// Too low:
 	// --------

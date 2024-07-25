@@ -9,6 +9,7 @@ import (
 	_ "github.com/ewoutquax/advent-of-code-2018/internal/day-05-alchemical-reduction"
 	_ "github.com/ewoutquax/advent-of-code-2018/internal/day-06-chronal-coordinates"
 	_ "github.com/ewoutquax/advent-of-code-2018/internal/day-07-the-sum-of-its-parts"
+	_ "github.com/ewoutquax/advent-of-code-2018/internal/day-17-reservoir-research"
 	"github.com/ewoutquax/advent-of-code-2018/pkg/register"
 )
 
