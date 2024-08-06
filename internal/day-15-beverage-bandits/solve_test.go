@@ -14,20 +14,20 @@ func TestParseInput(t *testing.T) {
 	assert := assert.New(t)
 	assert.IsType(Universe{}, universe)
 
-	assert.Len(universe.Positions, 15)             // Test number of parsed locations
-	assert.Len(universe.Creatures, 7)              // Test number of creatures
-	assert.IsType(Goblin{}, universe.Creatures[0]) // Test type of creatures
-	assert.IsType(Elve{}, universe.Creatures[len(universe.Creatures)-1])
-	assert.Equal(2, universe.Creatures[0].(Goblin).Location.X) // Test location of creatures
-	assert.Equal(1, universe.Creatures[0].(Goblin).Location.Y)
-	assert.Equal(4, universe.Creatures[len(universe.Creatures)-1].(Elve).Location.X)
-	assert.Equal(3, universe.Creatures[len(universe.Creatures)-1].(Elve).Location.Y)
+	assert.Len(universe.Positions, 15)                           // Test number of parsed locations
+	assert.Len(universe.Creatures, 7)                            // Test number of creatures
+	assert.Equal(TypeCreatureGoblin, universe.Creatures[0].Type) // Test type of creatures
+	assert.IsType(TypeCreatureElve, universe.Creatures[len(universe.Creatures)-1].Type)
+	assert.Equal(2, universe.Creatures[0].Location.X) // Test location of creatures
+	assert.Equal(1, universe.Creatures[0].Location.Y)
+	assert.Equal(4, universe.Creatures[len(universe.Creatures)-1].Location.X)
+	assert.Equal(3, universe.Creatures[len(universe.Creatures)-1].Location.Y)
 
 	// Test positions are linked to creatures
 	posTopLeft := universe.Positions[1]
 	assert.Equal(2, posTopLeft.Location.X)
 	assert.Equal(1, posTopLeft.Location.Y)
-	assert.IsType(Goblin{}, posTopLeft.Creature)
+	assert.IsType(TypeCreatureGoblin, posTopLeft.Creature.Type)
 }
 
 func TestLinkPositions(t *testing.T) {
@@ -53,17 +53,17 @@ func TestPlayOrderOfCreatures(t *testing.T) {
 
 	assert := assert.New(t)
 	assert.Len(creaturesInPlayOrder, 7)
-	assert.IsType(Goblin{}, creaturesInPlayOrder[0]) // assert type of first and last creature
-	assert.IsType(Elve{}, creaturesInPlayOrder[len(creaturesInPlayOrder)-1])
-	assert.Equal(2, creaturesInPlayOrder[0].(Goblin).Location.X) // assert location of first and last creature
-	assert.Equal(1, creaturesInPlayOrder[0].(Goblin).Location.Y)
-	assert.Equal(4, creaturesInPlayOrder[len(creaturesInPlayOrder)-1].(Elve).Location.X)
-	assert.Equal(3, creaturesInPlayOrder[len(creaturesInPlayOrder)-1].(Elve).Location.Y)
+	assert.Equal(TypeCreatureGoblin, creaturesInPlayOrder[0].Type) // assert type of first and last creature
+	assert.Equal(TypeCreatureElve, creaturesInPlayOrder[len(creaturesInPlayOrder)-1].Type)
+	assert.Equal(2, creaturesInPlayOrder[0].Location.X) // assert location of first and last creature
+	assert.Equal(1, creaturesInPlayOrder[0].Location.Y)
+	assert.Equal(4, creaturesInPlayOrder[len(creaturesInPlayOrder)-1].Location.X)
+	assert.Equal(3, creaturesInPlayOrder[len(creaturesInPlayOrder)-1].Location.Y)
 }
 
 func TestFindPaths(t *testing.T) {
 	universe := ParseInput(testInputMove())
-	elve := universe.Creatures[0].(Elve)
+	elve := universe.Creatures[0]
 
 	var path Path = FindPathToNearestEnemy(elve)
 	fmt.Printf("pathToNearestEnemy: %v\n", path.ToS())
@@ -81,13 +81,18 @@ func TestFindPaths(t *testing.T) {
 func TestMove(t *testing.T) {
 	universe := ParseInput(testInputMove())
 
-	elve := universe.Creatures[0].(Elve)
-	Move(elve, DirectionLeft)
+	elve := universe.Creatures[0]
+	origPos := elve.Position
+	destPos := universe.Positions[1]
+	fmt.Printf("destPos: %v\n", destPos.ToS())
+	elve.MoveTo(destPos)
 
-	assert.Equal(t, 2, elve.Location.X)
-	assert.Equal(t, 1, elve.Location.Y)
-	// The original position should no longer contain a creature
-	// The destination position should now contain a creature
+	assert := assert.New(t)
+
+	assert.Nil(origPos.Creature)                          // The original position should no longer contain a creature
+	assert.Equal(TypeCreatureElve, destPos.Creature.Type) // The destination position should now contain a creature
+	assert.Equal(2, elve.Location.X)                      // The elve is now at the new position
+	assert.Equal(1, elve.Location.Y)
 }
 
 func testInputParse() []string {

@@ -15,10 +15,25 @@ type Direction uint
 const CharGoblin string = "G"
 const CharElve string = "E"
 
-type Creature interface {
-	position() *Position
-	isDifferentType(Creature) bool
-	isAlive() bool
+type TypeCreature uint
+
+const (
+	TypeCreatureGoblin TypeCreature = iota + 1
+	TypeCreatureElve
+)
+
+type Creature struct {
+	Type TypeCreature
+	*Position
+	Health int
+}
+
+func (c Creature) isDifferentType(other Creature) bool {
+	return c.Type != other.Type
+}
+
+func (c Creature) isAlive() bool {
+	panic("Not yet implemented")
 }
 
 const (
@@ -56,24 +71,24 @@ func (l Location) inDirection(d Direction) Location {
 	}
 }
 
-type Goblin struct{ *Position }
-type Elve struct{ *Position }
-
-func (g Goblin) position() *Position             { return g.Position }
-func (g Goblin) isDifferentType(c Creature) bool { return fmt.Sprintf("%T", c) != fmt.Sprintf("%T", g) }
-func (g Goblin) isAlive() bool                   { return true }
-func (e Elve) position() *Position               { return e.Position }
-func (e Elve) isDifferentType(c Creature) bool   { return fmt.Sprintf("%T", c) != fmt.Sprintf("%T", e) }
-func (e Elve) isAlive() bool                     { return true }
+// type Goblin struct{ *Position }
+// type Elve struct{ *Position }
+//
+// func (g Goblin) position() *Position             { return g.Position }
+// func (g Goblin) isDifferentType(c Creature) bool { return fmt.Sprintf("%T", c) != fmt.Sprintf("%T", g) }
+// func (g Goblin) isAlive() bool                   { return true }
+// func (e Elve) position() *Position               { return e.Position }
+// func (e Elve) isDifferentType(c Creature) bool   { return fmt.Sprintf("%T", c) != fmt.Sprintf("%T", e) }
+// func (e Elve) isAlive() bool                     { return true }
 
 type Position struct {
 	Location
-	Creature
+	*Creature
 	LinkedPositions []*Position
 }
 
 func (p Position) toI() int    { return p.Location.toI() }
-func (p Position) toS() string { return fmt.Sprintf("[%d,%d]", p.Location.X, p.Location.Y) }
+func (p Position) ToS() string { return fmt.Sprintf("[%d,%d]", p.Location.X, p.Location.Y) }
 
 type Path struct {
 	Positions []*Position
@@ -83,7 +98,7 @@ func (p Path) ToS() string {
 	var out = make([]string, 0, len(p.Positions))
 
 	for _, pos := range p.Positions {
-		out = append(out, pos.toS())
+		out = append(out, pos.ToS())
 	}
 
 	return strings.Join(out, "; ")
@@ -94,8 +109,26 @@ type Universe struct {
 	Creatures []Creature
 }
 
-func Move[C Goblin | Elve](creature C, direction Direction) {
+func (c *Creature) MoveTo(newPos *Position) {
+	c.Position.Creature = nil
+	newPos.Creature = c
+	c.Position = newPos
 }
+
+func FindCreatureToAttack(c Creature) (bool, Creature) {
+	var isFound bool = false
+	var FoundCreature Creature
+
+	for _, nextPos := range c.Position.LinkedPositions {
+		if nextPos.Creature != nil {
+			if !isFound || isFound && FoundCreature.Health > nextPos.Creature.Health {
+			}
+		}
+	}
+
+	panic("Not yet implemented")
+}
+
 func FindPathToNearestEnemy(creature Creature) Path {
 	var doContinue bool = true
 	var maxSteps int = 0
@@ -104,10 +137,10 @@ func FindPathToNearestEnemy(creature Creature) Path {
 	var foundPaths = make(map[int][]Path)
 	foundPaths[0] = []Path{
 		{Positions: []*Position{
-			creature.position(),
+			creature.Position,
 		}},
 	}
-	visitedLocations[creature.position().toI()] = true
+	visitedLocations[creature.Position.toI()] = true
 
 	var ctrPanic int = 0
 
@@ -125,7 +158,7 @@ func FindPathToNearestEnemy(creature Creature) Path {
 			for _, linkedPosition := range currPos.LinkedPositions {
 				_, exists := visitedLocations[linkedPosition.toI()]
 				if !exists && linkedPosition.Creature == nil {
-					fmt.Printf("we move from %s to %s\n", currPos.toS(), linkedPosition.toS())
+					fmt.Printf("we move from %s to %s\n", currPos.ToS(), linkedPosition.ToS())
 
 					visitedLocations[linkedPosition.toI()] = true
 					foundPaths[maxSteps+1] = append(foundPaths[maxSteps+1], Path{
@@ -139,7 +172,7 @@ func FindPathToNearestEnemy(creature Creature) Path {
 
 						doContinue = false
 
-						fmt.Printf("Creature found at %s\n", linkedPosition.toS())
+						fmt.Printf("Creature found at %s\n", linkedPosition.ToS())
 						fmt.Printf("foundPath: %v\n", foundPath.ToS())
 						break
 					}
@@ -165,7 +198,7 @@ func PlayOrderOfCreatures(u *Universe) []Creature {
 
 	for _, creature := range u.Creatures {
 		creaturesWithOrderNr = append(creaturesWithOrderNr, CreatureWithOrderNr{
-			orderNr:  creature.position().Location.toI(),
+			orderNr:  creature.Position.Location.toI(),
 			Creature: creature,
 		})
 	}
@@ -206,17 +239,21 @@ func ParseInput(lines []string) Universe {
 
 				switch char {
 				case CharGoblin:
-					goblin := Goblin{
+					goblin := Creature{
+						Type:     TypeCreatureGoblin,
 						Position: pos,
+						Health:   200,
 					}
 					universe.Creatures = append(universe.Creatures, goblin)
-					pos.Creature = goblin
+					pos.Creature = &goblin
 				case CharElve:
-					elve := Elve{
+					elve := Creature{
+						Type:     TypeCreatureElve,
 						Position: pos,
+						Health:   200,
 					}
 					universe.Creatures = append(universe.Creatures, elve)
-					pos.Creature = elve
+					pos.Creature = &elve
 				default:
 					continue
 				}
