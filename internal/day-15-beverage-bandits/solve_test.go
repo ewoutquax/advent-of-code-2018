@@ -65,7 +65,7 @@ func TestFindPaths(t *testing.T) {
 	universe := ParseInput(testInputMove())
 	elve := universe.Creatures[0]
 
-	var path Path = FindPathToNearestEnemy(elve)
+	var path Path = elve.FindPathToNearestEnemy()
 	fmt.Printf("pathToNearestEnemy: %v\n", path.ToS())
 
 	assert := assert.New(t)
@@ -95,6 +95,58 @@ func TestMove(t *testing.T) {
 	assert.Equal(1, elve.Location.Y)
 }
 
+func TestFindCreatureToAttack(t *testing.T) {
+	assert := assert.New(t)
+
+	universe := ParseInput(testInputAttack())
+	universe.Creatures[0].Health = 2  // first found creature, but of same type
+	universe.Creatures[2].Health = 10 // first found creature
+	universe.Creatures[3].Health = 5  // second found creature, with least healt
+	universe.Creatures[4].Health = 2  // Diagonal creature, not viable
+
+	elve1 := universe.Creatures[0]
+	assert.Equal(1, elve1.Position.Location.X)
+	assert.Equal(1, elve1.Position.Location.Y)
+	isFound, _ := elve1.FindCreatureToAttack()
+	assert.False(isFound)
+
+	elve2 := universe.Creatures[1]
+	assert.Equal(1, elve2.Position.Location.X) // Did we select the correct creature/
+	assert.Equal(2, elve2.Position.Location.Y)
+
+	isFound, creatureToAttack := elve2.FindCreatureToAttack()
+	assert.True(isFound)
+	assert.Equal(TypeCreatureGoblin, creatureToAttack.Type)
+	assert.Equal(1, creatureToAttack.Position.Location.X) // Are we attacking the intended creature
+	assert.Equal(3, creatureToAttack.Position.Location.Y)
+}
+
+func TestDoAttack(t *testing.T) {
+	universe := ParseInput(testInputAttack())
+
+	assert := assert.New(t)
+
+	universe.Creatures[0].Health = 2  // first found creature, but of same type
+	universe.Creatures[2].Health = 10 // first found creature
+	universe.Creatures[3].Health = 5  // second found creature, with least healt
+	universe.Creatures[4].Health = 2  // Diagonal creature, not viable
+
+	elve := universe.Creatures[1]
+	_, creatureToAttack := elve.FindCreatureToAttack()
+	posWithAttacker := creatureToAttack.Position
+
+	elve.DoAttack(creatureToAttack)
+	assert.Equal(200, elve.Health)
+	assert.True(creatureToAttack.IsAlive())
+	assert.Equal(2, creatureToAttack.Health)
+
+	// attack 'm again
+	elve.DoAttack(creatureToAttack)
+	assert.Equal(200, elve.Health)
+	assert.False(creatureToAttack.IsAlive())
+	assert.Nil(posWithAttacker.Creature)
+}
+
 func testInputParse() []string {
 	return []string{
 		"#######",
@@ -112,5 +164,15 @@ func testInputMove() []string {
 		"#.E.#.#",
 		"#.G.#G#",
 		"#######",
+	}
+}
+
+func testInputAttack() []string {
+	return []string{
+		"######",
+		"#E.. #",
+		"#EG. #",
+		"#GG. #",
+		"######",
 	}
 }

@@ -28,12 +28,19 @@ type Creature struct {
 	Health int
 }
 
-func (c Creature) isDifferentType(other Creature) bool {
+func (c Creature) isDifferentType(other *Creature) bool {
 	return c.Type != other.Type
 }
 
-func (c Creature) isAlive() bool {
-	panic("Not yet implemented")
+func (c Creature) IsAlive() bool {
+	return c.Health >= 0
+}
+
+func (c Creature) DoAttack(victim *Creature) {
+	victim.Health -= 3
+	if victim.Health <= 0 {
+		victim.Position.Creature = nil
+	}
 }
 
 const (
@@ -106,7 +113,7 @@ func (p Path) ToS() string {
 
 type Universe struct {
 	Positions []*Position
-	Creatures []Creature
+	Creatures []*Creature
 }
 
 func (c *Creature) MoveTo(newPos *Position) {
@@ -115,21 +122,32 @@ func (c *Creature) MoveTo(newPos *Position) {
 	c.Position = newPos
 }
 
-func FindCreatureToAttack(c Creature) (bool, Creature) {
+func (c Creature) FindCreatureToAttack() (bool, *Creature) {
 	var isFound bool = false
-	var FoundCreature Creature
+	var foundCreature *Creature
+
+	fmt.Printf("Attacker is at position: %v\n", c.Position.ToS())
 
 	for _, nextPos := range c.Position.LinkedPositions {
+		fmt.Printf("Checking position: %v\n", nextPos.ToS())
 		if nextPos.Creature != nil {
-			if !isFound || isFound && FoundCreature.Health > nextPos.Creature.Health {
+			if nextPos.Creature.IsAlive() &&
+				c.isDifferentType(nextPos.Creature) &&
+				(!isFound ||
+					isFound && foundCreature.Health > nextPos.Creature.Health) {
+
+				fmt.Printf("Selecting creature at %v with health %d\n", nextPos.ToS(), nextPos.Creature.Health)
+
+				isFound = true
+				foundCreature = nextPos.Creature
 			}
 		}
 	}
 
-	panic("Not yet implemented")
+	return isFound, foundCreature
 }
 
-func FindPathToNearestEnemy(creature Creature) Path {
+func (creature *Creature) FindPathToNearestEnemy() Path {
 	var doContinue bool = true
 	var maxSteps int = 0
 	var visitedLocations = make(map[int]bool)
@@ -188,10 +206,10 @@ func FindPathToNearestEnemy(creature Creature) Path {
 	return foundPath
 }
 
-func PlayOrderOfCreatures(u *Universe) []Creature {
+func PlayOrderOfCreatures(u *Universe) []*Creature {
 	type CreatureWithOrderNr struct {
 		orderNr int
-		Creature
+		*Creature
 	}
 
 	var creaturesWithOrderNr []CreatureWithOrderNr = make([]CreatureWithOrderNr, 0, len(u.Creatures))
@@ -210,7 +228,7 @@ func PlayOrderOfCreatures(u *Universe) []Creature {
 		return 1
 	})
 
-	var out = make([]Creature, 0, len(u.Creatures))
+	var out = make([]*Creature, 0, len(u.Creatures))
 
 	for _, creaturesWithOrderNr := range creaturesWithOrderNr {
 		out = append(out, creaturesWithOrderNr.Creature)
@@ -222,7 +240,7 @@ func PlayOrderOfCreatures(u *Universe) []Creature {
 func ParseInput(lines []string) Universe {
 	var universe = Universe{
 		Positions: make([]*Position, 0),
-		Creatures: make([]Creature, 0),
+		Creatures: make([]*Creature, 0),
 	}
 
 	for y, line := range lines {
@@ -244,7 +262,7 @@ func ParseInput(lines []string) Universe {
 						Position: pos,
 						Health:   200,
 					}
-					universe.Creatures = append(universe.Creatures, goblin)
+					universe.Creatures = append(universe.Creatures, &goblin)
 					pos.Creature = &goblin
 				case CharElve:
 					elve := Creature{
@@ -252,7 +270,7 @@ func ParseInput(lines []string) Universe {
 						Position: pos,
 						Health:   200,
 					}
-					universe.Creatures = append(universe.Creatures, elve)
+					universe.Creatures = append(universe.Creatures, &elve)
 					pos.Creature = &elve
 				default:
 					continue
