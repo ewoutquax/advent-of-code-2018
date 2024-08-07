@@ -78,6 +78,24 @@ func TestFindPaths(t *testing.T) {
 	assert.Equal(1, path.Positions[2].Location.Y)
 }
 
+func TestFindPathsWhenNoPathToEnemy(t *testing.T) {
+	universe := ParseInput(testInputMoveNoPath())
+	elve := universe.Creatures[0]
+
+	var path Path = elve.FindPathToNearestEnemy()
+
+	assert.Len(t, path.Positions, 0)
+}
+
+func TestFindPathsWhenNoMoveRequired(t *testing.T) {
+	universe := ParseInput(testInputMoveNoMoveRequired())
+	elve := universe.Creatures[0]
+
+	var path Path = elve.FindPathToNearestEnemy()
+
+	assert.Len(t, path.Positions, 1)
+}
+
 func TestMove(t *testing.T) {
 	universe := ParseInput(testInputMove())
 
@@ -147,6 +165,30 @@ func TestDoAttack(t *testing.T) {
 	assert.Nil(posWithAttacker.Creature)
 }
 
+func TestIsExtraRoundRequiredTrue(t *testing.T) {
+	universe := ParseInput(testInputAttack())
+
+	assert.True(t, universe.IsExtraRoundRequired())
+}
+
+func TestIsExtraRoundRequiredFalse(t *testing.T) {
+	universe := ParseInput(testInputAttack())
+
+	// Kill both elves
+	universe.Creatures[0].Health = -2
+	universe.Creatures[1].Health = -2
+
+	assert.False(t, universe.IsExtraRoundRequired())
+}
+
+func TestExample1(t *testing.T) {
+	universe := ParseInput(testInputExample1())
+
+	score := PlayGame(&universe)
+
+	assert.Equal(t, 2, score)
+}
+
 func testInputParse() []string {
 	return []string{
 		"#######",
@@ -167,6 +209,26 @@ func testInputMove() []string {
 	}
 }
 
+func testInputMoveNoPath() []string {
+	return []string{
+		"#######",
+		"#EE.G.#",
+		"###.#.#",
+		"#.G.#G#",
+		"#######",
+	}
+}
+
+func testInputMoveNoMoveRequired() []string {
+	return []string{
+		"#######",
+		"#.....#",
+		"#.EG..#",
+		"#.....#",
+		"#######",
+	}
+}
+
 func testInputAttack() []string {
 	return []string{
 		"######",
@@ -174,5 +236,17 @@ func testInputAttack() []string {
 		"#EG. #",
 		"#GG. #",
 		"######",
+	}
+}
+
+func testInputExample1() []string {
+	return []string{
+		"#######",
+		"#.G...#",
+		"#...EG#",
+		"#.#.#G#",
+		"#..G#E#",
+		"#.....#",
+		"#######",
 	}
 }

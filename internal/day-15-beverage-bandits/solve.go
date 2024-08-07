@@ -17,6 +17,17 @@ const CharElve string = "E"
 
 type TypeCreature uint
 
+func (t TypeCreature) toS() string {
+	switch t {
+	case TypeCreatureGoblin:
+		return "G"
+	case TypeCreatureElve:
+		return "E"
+	default:
+		panic("No valid case found")
+	}
+}
+
 const (
 	TypeCreatureGoblin TypeCreature = iota + 1
 	TypeCreatureElve
@@ -55,7 +66,11 @@ type Location struct {
 	Y int
 }
 
-func (l Location) toI() int { return l.Y*1000 + l.X }
+func toIndex(x, y int) int {
+	return y*1000 + x
+}
+
+func (l Location) toI() int { return toIndex(l.X, l.Y) }
 func (l Location) inDirection(d Direction) Location {
 	var vector [2]int
 
@@ -116,6 +131,18 @@ type Universe struct {
 	Creatures []*Creature
 }
 
+func (u *Universe) IsExtraRoundRequired() bool {
+	var foundTypeCreatures map[TypeCreature]bool = make(map[TypeCreature]bool, 2)
+
+	for _, creature := range u.Creatures {
+		if creature.IsAlive() {
+			foundTypeCreatures[creature.Type] = true
+		}
+	}
+
+	return len(foundTypeCreatures) >= 2
+}
+
 func (c *Creature) MoveTo(newPos *Position) {
 	c.Position.Creature = nil
 	newPos.Creature = c
@@ -126,17 +153,17 @@ func (c Creature) FindCreatureToAttack() (bool, *Creature) {
 	var isFound bool = false
 	var foundCreature *Creature
 
-	fmt.Printf("Attacker is at position: %v\n", c.Position.ToS())
+	// fmt.Printf("Attacker is at position: %v\n", c.Position.ToS())
 
 	for _, nextPos := range c.Position.LinkedPositions {
-		fmt.Printf("Checking position: %v\n", nextPos.ToS())
+		// fmt.Printf("Checking position: %v\n", nextPos.ToS())
 		if nextPos.Creature != nil {
 			if nextPos.Creature.IsAlive() &&
 				c.isDifferentType(nextPos.Creature) &&
 				(!isFound ||
 					isFound && foundCreature.Health > nextPos.Creature.Health) {
 
-				fmt.Printf("Selecting creature at %v with health %d\n", nextPos.ToS(), nextPos.Creature.Health)
+				// fmt.Printf("Selecting creature at %v with health %d\n", nextPos.ToS(), nextPos.Creature.Health)
 
 				isFound = true
 				foundCreature = nextPos.Creature
@@ -170,13 +197,13 @@ func (creature *Creature) FindPathToNearestEnemy() Path {
 		foundPaths[maxSteps+1] = make([]Path, 0)
 
 		for _, currPath := range foundPaths[maxSteps] {
-			fmt.Printf("currPath: %v\n", currPath.ToS())
+			// fmt.Printf("currPath: %v\n", currPath.ToS())
 
 			currPos := currPath.Positions[len(currPath.Positions)-1]
 			for _, linkedPosition := range currPos.LinkedPositions {
 				_, exists := visitedLocations[linkedPosition.toI()]
 				if !exists && linkedPosition.Creature == nil {
-					fmt.Printf("we move from %s to %s\n", currPos.ToS(), linkedPosition.ToS())
+					// fmt.Printf("we move from %s to %s\n", currPos.ToS(), linkedPosition.ToS())
 
 					visitedLocations[linkedPosition.toI()] = true
 					foundPaths[maxSteps+1] = append(foundPaths[maxSteps+1], Path{
@@ -190,8 +217,8 @@ func (creature *Creature) FindPathToNearestEnemy() Path {
 
 						doContinue = false
 
-						fmt.Printf("Creature found at %s\n", linkedPosition.ToS())
-						fmt.Printf("foundPath: %v\n", foundPath.ToS())
+						// fmt.Printf("Creature found at %s\n", linkedPosition.ToS())
+						// fmt.Printf("foundPath: %v\n", foundPath.ToS())
 						break
 					}
 				}
@@ -199,10 +226,16 @@ func (creature *Creature) FindPathToNearestEnemy() Path {
 		}
 
 		maxSteps += 1
-		fmt.Printf("All positions for current nr step exhausted; Increasing to: %v\n", maxSteps)
+
+		if len(foundPaths[maxSteps]) == 0 {
+			doContinue = false
+			// fmt.Println("No more positions to investigature further; stop searching")
+		} else {
+			// fmt.Printf("All positions for current nr step exhausted; Increasing to: %v\n", maxSteps)
+		}
 	}
 
-	fmt.Printf("returning foundPath: %v\n", foundPath.ToS())
+	// fmt.Printf("returning foundPath: %v\n", foundPath.ToS())
 	return foundPath
 }
 
@@ -304,6 +337,62 @@ func linkPositions(u *Universe) {
 func directionsInReadingOrder() []Direction {
 	return []Direction{
 		DirectionUp, DirectionLeft, DirectionRight, DirectionDown,
+	}
+}
+
+func PlayGame(u *Universe) int {
+	var nrRounds int = 0
+
+	for u.IsExtraRoundRequired() {
+		for _, creature := range PlayOrderOfCreatures(u) {
+			path := creature.FindPathToNearestEnemy()
+			if len(path.Positions) >= 2 {
+				creature.MoveTo(path.Positions[1])
+			}
+			if isFound, victim := creature.FindCreatureToAttack(); isFound {
+				creature.DoAttack(victim)
+			}
+		}
+
+		nrRounds++
+		draw(u, nrRounds)
+	}
+
+	return nrRounds
+}
+
+func draw(u *Universe, round int) {
+	var indexedPositions = make(map[int]*Position)
+
+	fmt.Printf("\nround: %v\n", round)
+	fmt.Print("---------\n")
+
+	for _, pos := range u.Positions {
+		indexedPositions[pos.toI()] = pos
+	}
+
+	for y := 0; y < 7; y++ {
+		var creaturesInRow = make([]*Creature, 0)
+		for x := 0; x < 7; x++ {
+			t := toIndex(x, y)
+
+			if pos, exists := indexedPositions[t]; exists {
+				if pos.Creature != nil && pos.Creature.IsAlive() {
+					creaturesInRow = append(creaturesInRow, pos.Creature)
+					fmt.Printf("%s", pos.Creature.Type.toS())
+				} else {
+					fmt.Print(".")
+				}
+			} else {
+				fmt.Print("#")
+			}
+		}
+
+		var suffixes []string = make([]string, 0)
+		for _, c := range creaturesInRow {
+			suffixes = append(suffixes, fmt.Sprintf("%s(%d)", c.Type.toS(), c.Health))
+		}
+		fmt.Printf(" %v\n", strings.Join(suffixes, ", "))
 	}
 }
 
