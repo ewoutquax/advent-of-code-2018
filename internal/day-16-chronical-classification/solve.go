@@ -2,6 +2,8 @@ package day16chronicalclassification
 
 import (
 	"fmt"
+	"slices"
+	"sort"
 	"strconv"
 	"strings"
 
@@ -32,6 +34,8 @@ const (
 	MIN_VALID_OPCODES int    = 3
 	Day               string = "16"
 )
+
+type MappingOpcode map[int]Opcode
 
 type Instruction struct {
 	Opcode
@@ -188,11 +192,94 @@ func solvePart1(inputFile string) {
 }
 
 func solvePart2(inputFile string) {
-	// lines := utils.ReadFileAsLines(inputFile)
-	_ = inputFile
+	blocks := utils.ReadFileAsBlocks(inputFile)
 
-	var count int = 0
-	fmt.Printf("Result of day-%s / part-2: %d\n", Day, count)
+	mappedOpcodes := mapOpcodes(blocks)
+
+	var registers Registers = Registers{
+		0: 0,
+		1: 0,
+		2: 0,
+		3: 0,
+	}
+
+	for _, rawInstruction := range blocks[len(blocks)-1] {
+		instruction := ParseInstruction(rawInstruction)
+		instruction.Opcode = mappedOpcodes[int(instruction.Opcode)]
+
+		instruction.Exec(registers)
+	}
+
+	fmt.Printf("Result of day-%s / part-2: %d\n", Day, registers[0])
+}
+
+func mapOpcodes(blocks [][]string) MappingOpcode {
+	type OpcodeToInts map[Opcode][]int
+
+	var opcodeToInts OpcodeToInts = make(OpcodeToInts)
+
+	// initialize
+	for idx := 0; idx <= 15; idx++ {
+		opcodeToInts[Opcode(idx+1)] = make([]int, 0, 16)
+	}
+
+	// find valid Opcode by opcode-id
+	for idx := 0; idx < len(blocks)-2; idx++ {
+		instruction := ParseInstruction(blocks[idx][1])
+
+		opcodes := ValidOpcodes(blocks[idx])
+
+		// store possible opcode-ids by Opcode
+		for _, opcode := range opcodes {
+			opcodeToInts[opcode] = append(opcodeToInts[opcode], int(instruction.Opcode))
+		}
+	}
+
+	// remove duplicate opcode-ids per opcode, and sort them for convinience
+	for opcode, ints := range opcodeToInts {
+		uniqInts := uniq(ints)
+		sort.Ints(uniqInts)
+		opcodeToInts[opcode] = uniqInts
+	}
+
+	var mappedOpcodes map[int]Opcode = make(map[int]Opcode, 16)
+
+	// When an opcode is linked to just 1 opcode-id, then copy the link to the output and remove the opcode-id from all opcodes
+	for len(mappedOpcodes) < 16 {
+		for opcode, ints := range opcodeToInts {
+			if len(ints) == 1 {
+				mappedOpcodes[ints[0]] = opcode
+
+				for subOpcode, subInts := range opcodeToInts {
+					var cleanedInts []int = make([]int, 0)
+					if len(subInts) > 0 {
+						cleanedInts = slices.DeleteFunc(subInts, func(subInt int) bool {
+							return subInt == ints[0]
+						})
+					}
+
+					opcodeToInts[subOpcode] = cleanedInts
+				}
+			}
+		}
+	}
+
+	return mappedOpcodes
+}
+
+func uniq(ints []int) []int {
+	var uniqInts []int = make([]int, 0, 15)
+	var unique map[int]bool = make(map[int]bool, 15)
+
+	for _, currentInt := range ints {
+		unique[currentInt] = true
+	}
+
+	for currentInt := range unique {
+		uniqInts = append(uniqInts, currentInt)
+	}
+
+	return uniqInts
 }
 
 func init() {
