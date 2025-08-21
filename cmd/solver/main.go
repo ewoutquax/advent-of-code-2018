@@ -8,6 +8,7 @@ import (
 
 	_ "github.com/ewoutquax/advent-of-code-2018/internal/day-06-chronal-coordinates"
 	_ "github.com/ewoutquax/advent-of-code-2018/internal/day-07-the-sum-of-its-parts"
+	_ "github.com/ewoutquax/advent-of-code-2018/internal/day-13-mine-cart-madness"
 	_ "github.com/ewoutquax/advent-of-code-2018/internal/day-16-chronical-classification"
 	_ "github.com/ewoutquax/advent-of-code-2018/internal/day-19-go-with-the-flow"
 	"github.com/ewoutquax/advent-of-code-2018/pkg/register"
